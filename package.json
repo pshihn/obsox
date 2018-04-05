@@ -4,6 +4,11 @@
   "description": "Make any object observable 👀",
   "main": "index.js",
   "scripts": {
+    "build": "npm run build-d && npm run build-umd",
+    "build-d": "rollup index.js --o dist/obsox.js --f iife --name \"obsox\" && npm run minify-d",
+    "minify-d": "babel-minify dist/obsox.js -o dist/obsox.min.js --mangle",
+    "build-umd": "rollup index.js --o dist/obsox.umd.js --f umd --name \"obsox\" && npm run minify-umd",
+    "minify-umd": "babel-minify dist/obsox.umd.js -o dist/obsox.umd.min.js --mangle",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -22,5 +27,9 @@
   "bugs": {
     "url": "https://github.com/pshihn/obsox/issues"
   },
-  "homepage": "https://github.com/pshihn/obsox#readme"
+  "homepage": "https://github.com/pshihn/obsox#readme",
+  "devDependencies": {
+    "babel-minify": "^0.3.0",
+    "rollup": "^0.57.1"
+  }
 }
