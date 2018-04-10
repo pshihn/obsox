@@ -30,6 +30,7 @@
   "homepage": "https://github.com/pshihn/obsox#readme",
   "devDependencies": {
     "babel-minify": "^0.3.0",
-    "rollup": "^0.57.1"
+    "rollup": "^0.57.1",
+    "key-tree": "^1.0.1"
   }
 }

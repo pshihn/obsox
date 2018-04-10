@@ -1,3 +1,5 @@
+import _ from './node_modules/key-tree/index';
+
 export default function obsox(obj) {
   return obsox_(obj, [], true);
 }
@@ -9,10 +11,11 @@ function obsox_(obj, path, force) {
 
 class Obsox {
   constructor(obj, path) {
-    this._o = obj;
-    this._path = path || [];
+    this.raw = obj;
+    this.path = path || [];
     obj._obsox = this;
     this._proxy = new Proxy(obj, this);
+    this.tree = new _();
   }
 
   get proxy() {
@@ -22,14 +25,12 @@ class Obsox {
   get(obj, prop, receiver) {
     const ret = Reflect.get(obj, prop, receiver);
     if (typeof ret === 'object') {
-      return obsox_(ret, this._path.concat(prop));
+      return obsox_(ret, this.path.concat(prop));
     }
-    console.log("get", this._path, ret);
     return ret;
   }
 
   set(obj, prop, value) {
     Reflect.set(obj, prop, value);
-    console.log("set", this._path, prop, value);
   }
 }
