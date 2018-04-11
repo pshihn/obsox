@@ -9,11 +9,14 @@ var obsox = (function () {
       this.parent = parent;
       this.appendValues(values);
     }
-    removeAllChildren() {
-      this.children = [];
-    }
-    clearValues() {
-      this.values = [];
+    get fullPath() {
+      let ret = [];
+      let current = this;
+      while (current) {
+        ret.splice(0, 0, current.key);
+        current = current.parent;
+      }
+      return ret;
     }
     getChild(key) {
       for (const c of this.children) {
@@ -96,19 +99,31 @@ var obsox = (function () {
 
     getSub(key, grouped) {
       let result = { grouped: {}, ungrouped: [] };
-      this._subChildren(key, this._getNode(key), result);
+      this._reduce(key, this._getNode(key), result, true);
       return grouped ? result.grouped : result.ungrouped;
     }
 
-    _subChildren(keyPath, node, result) {
-      if (!node) {
-        return;
-      }
+    getSup(key, grouped) {
+      let result = { grouped: {}, ungrouped: [] };
+      this._reduce(key, this._getNode(key), result, false);
+      return grouped ? result.grouped : result.ungrouped;
+    }
+
+    _reduce(keyPath, node, result, isSub) {
+      if (!node) return;
       result.grouped[keyPath] = node.values;
       result.ungrouped = result.ungrouped.concat(node.values);
-      for (const c of node.children) {
-        let ckey = `${keyPath}${this.sep}${c.key}`;
-        this._subChildren(ckey, c, result);
+      if (isSub) {
+        for (const c of node.children) {
+          const ckey = `${keyPath}${this.sep}${c.key}`;
+          this._reduce(ckey, c, result, isSub);
+        }
+      } else {
+        const parent = node.parent;
+        if (parent) {
+          const pkey = parent.fullPath.join(this.sep);
+          this._reduce(pkey, parent, result, isSub);
+        }
       }
     }
 
@@ -161,13 +176,12 @@ var obsox = (function () {
     }
 
     removeChildren(key) {
-      let ret = false;
       const node = this._getNode(key);
       if (node) {
-        node.removeAllChildren();
-        ret = true;
+        node.children = [];
+        return true;
       }
-      return ret;
+      return false;
     }
 
     clearKey(key, clearChildren) {
@@ -178,7 +192,7 @@ var obsox = (function () {
     }
 
     _clearNodeValues(node, clearChildren) {
-      node.clearValues();
+      node.values = [];
       if (clearChildren) {
         for (const c of node.children) {
           this._clearNodeValues(c, clearChildren);
@@ -191,18 +205,51 @@ var obsox = (function () {
     return obsox_(obj, [], true);
   }
 
-  function obsox_(obj, path, force) {
+  function obsox_(obj, path, force, tree) {
     if (obj._obsox && (!force)) return obj._obsox.proxy;
-    return (new Obsox(obj, path)).proxy;
+    return (new Obsox(obj, path, tree)).proxy;
   }
 
   class Obsox {
-    constructor(obj, path) {
+    constructor(obj, path, tree) {
       this.raw = obj;
+      this.tree = tree || new KeyTree();
       this.path = path || [];
-      obj._obsox = this;
       this._proxy = new Proxy(obj, this);
-      this.tree = new KeyTree();
+      if (!this.tree._cache) {
+        this.tree._counter = 0;
+        this.tree._cache = {};
+      }
+      obj._obsox = this;
+      obj.observe = (path, callback, options) => {
+        const id = ++this.tree._counter;
+        if (callback) {
+          const keyPath = (path || '').trim();
+          const cbo = { o: options || {}, cb: callback };
+          this.tree._cache[id] = { keyPath, cbo };
+          this.tree.add(keyPath, cbo);
+        }
+        return id;
+      };
+      obj.unobserve = (id) => {
+        let cached = this.tree._cache[id];
+        if (cached) {
+          this.tree.remove(cached.keyPath, cached.cbo);
+          delete this.tree._cache[id];
+        }
+      };
+      obj.observeOnce = (path, callback, options) => {
+        const ids = [];
+        const cb = response => {
+          this.raw.unobserve(ids[0]);
+          try {
+            if (callback)
+              callback(response);
+          } catch (err) { }
+        };
+        ids.push(this.raw.observe(path, cb, options));
+        return ids[0];
+      };
     }
 
     get proxy() {
@@ -212,13 +259,15 @@ var obsox = (function () {
     get(obj, prop, receiver) {
       const ret = Reflect.get(obj, prop, receiver);
       if (typeof ret === 'object') {
-        return obsox_(ret, this.path.concat(prop));
+        return obsox_(ret, this.path.concat(prop), false, this.tree);
       }
       return ret;
     }
 
     set(obj, prop, value) {
       Reflect.set(obj, prop, value);
+      let path = this.path.concat(prop).join('.');
+      console.log("Set -> ", path);
     }
   }
 
